@@ -1,5 +1,5 @@
 #!python
-import io
+import io, re
 import uvicorn
 from pydantic import BaseModel
 from fastapi import FastAPI, Response
@@ -30,6 +30,14 @@ class Req(BaseModel):
     input: str
     voice: str = "azelma"
 
+def strip_unspoken(line: str):
+    # Remove all unspoken characters, including URLs which are annoying to listen to
+    # Exceptions made for characters that modify speach, like quotes in contractions and punctuation marks
+    no_urls = re.sub(r'https?://\S+', '', line)
+    no_misc = re.sub(r'[^a-zA-Z0-9.?!$%\x22\u2019\x60]', ' ', no_urls)
+    spoken = re.sub(r'\s\s+', ' ', no_misc).strip()
+    return spoken
+
 @app.post("/v1/audio/speech")
 @app.post("/audio/speech")
 @app.post("/")
@@ -38,7 +46,7 @@ async def speech(r: Req):
     voice_model = tts.get_state_for_audio_prompt(target_voice)
     audio_chunks = tts.generate_audio_stream(
                 model_state=voice_model,
-                text_to_generate=r.input,
+                text_to_generate=strip_unspoken(r.input),
                 frames_after_eos=DEFAULT_FRAMES_AFTER_EOS,
             )
     buf = io.BytesIO()
