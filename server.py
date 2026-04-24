@@ -42,19 +42,22 @@ def strip_unspoken(line: str):
 @app.post("/audio/speech")
 @app.post("/")
 async def speech(r: Req):
+    speak_text = strip_unspoken(r.input)
     target_voice = r.voice if r.voice in AVAILABLE_VOICES else "azelma"
     voice_model = tts.get_state_for_audio_prompt(target_voice)
-    audio_chunks = tts.generate_audio_stream(
-                model_state=voice_model,
-                text_to_generate=strip_unspoken(r.input),
-                frames_after_eos=DEFAULT_FRAMES_AFTER_EOS,
-            )
     buf = io.BytesIO()
     sample_rate = tts.config.mimi.sample_rate
     writer = StreamingWAVWriter(buf, sample_rate)
     writer.write_header(sample_rate)
-    for chunk in audio_chunks:
-        writer.write_pcm_data(chunk)
+    if speak_text:
+        audio_chunks = tts.generate_audio_stream(
+                    model_state=voice_model,
+                    text_to_generate=speak_text,
+                    frames_after_eos=DEFAULT_FRAMES_AFTER_EOS,
+                )
+
+        for chunk in audio_chunks:
+            writer.write_pcm_data(chunk)
     writer._flush()
     buf.seek(0)
     return Response(content=buf.read(), media_type="audio/wav")
