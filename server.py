@@ -31,12 +31,65 @@ class Req(BaseModel):
     voice: str = "azelma"
 
 def strip_unspoken(line: str):
-    # Remove all unspoken characters, including URLs which are annoying to listen to
-    # Exceptions made for characters that modify speach, like quotes in contractions and punctuation marks
-    no_urls = re.sub(r'https?://\S+', '', line)
-    no_misc = re.sub(r'[^a-zA-Z0-9.?!$%\x22\u2019\x60]', ' ', no_urls)
-    spoken = re.sub(r'\s\s+', ' ', no_misc).strip()
-    return spoken
+    """
+    Remove all unspoken characters, including URLs which are annoying to listen to.
+    Exceptions made for characters that modify speach, like quotes in contractions and punctuation marks.
+    Symbols, like dollar signs, plus signs, etc. are converted to words (pocket_tts has issues with those)
+    Anything string that is essentially unpronounceable (i.e. "!!?!") becomes an empty string.
+    """
+
+    def dollar_to_spoken(match):
+        """
+        Replacement function for re.sub.
+        Converts a matched dollar amount into a spoken form.
+        """
+        dollars = match.group('dollars')
+        cents = match.group('cents')
+
+        # Remove commas from the dollar part (e.g., "1,234" -> "1234")
+        dollars_clean = dollars.replace(',', '')
+
+        if cents is None:
+            # No cents – just dollars
+            return f"{dollars_clean} dollars"
+        else:
+            return f"{dollars_clean} dollars and {cents} cents"
+    def email_to_spoken(match):
+        """
+        Replacement function for re.sub.
+        Converts a matched email address into a spoken form.
+        """
+        email = match.group(0)                # the full matched email
+        # Replace '@' with ' at ' and '.' with ' dot '
+        spoken = email.replace('@', ' at ').replace('.', ' dot ')
+        return spoken
+
+    money_matcher = re.compile(r'\$(?P<dollars>\d{1,3}(?:,\d{3})*|\d+)(?:\.(?P<cents>\d{2}))?')
+    email_matcher = re.compile(r'\b[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}\b')
+    line = money_matcher.sub(dollar_to_spoken, line)
+    line = email_matcher.sub(email_to_spoken, line)
+
+    text_fixes = [
+        (r'https?://\S+', ''), # Remove URLs
+        (r'&\S+;', ' '), # Remove HTML special chars
+        (r'[\u2019\u2018\x60\x91\x92]+','\x27'), # All single quotes become '
+        (r'[\u201c\u201d\x93\x94]+','\x22'), # All double quotes become "
+        (r'[^a-zA-Z0-9á-úÁ-Ú\?\!\-\+\=\@\&\%\x2E\x22\x27]', ' '), # Remove 'unspoken' characters
+        (r'%+', ' percent '), # Translate %
+        (r'\&+', ' and '), # Translate &
+        (r'\++', ' plus '), # Translate &
+        (r'\@+', ' at '), # Translate @
+        (r'=+', ' equals '), # Translate =
+        (r'\-+', '-'), # Removes duplicates...
+        (r'\x2E+', '\x2E'), # Removes duplicates...
+        (r'\x27+', '\x27'), # Removes duplicates...
+        (r'\x22+', '\x22'), # Removes duplicates...
+        (r'\s\s+', ' '), # Reduce excess whitespace
+        (r'^[\-\s\x2E\x22\x27\?\!]+$', ''), # Any string that is ONLY non-verbals becomes empty.
+    ]
+    for reg, rep in text_fixes:
+        line = re.sub(reg, rep, line)
+    return line
 
 @app.post("/v1/audio/speech")
 @app.post("/audio/speech")
