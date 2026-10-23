@@ -71,6 +71,7 @@ def strip_unspoken(line: str):
 
     text_fixes = [
         (r'https?://\S+', ''), # Remove URLs
+        (r'<[^>]+?>', ' '), # Remove HTML Tags
         (r'&\S+;', ' '), # Remove HTML special chars
         (r'[\u2019\u2018\x60\x91\x92]+','\x27'), # All single quotes become '
         (r'[\u201c\u201d\x93\x94]+','\x22'), # All double quotes become "
